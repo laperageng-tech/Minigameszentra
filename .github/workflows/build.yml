@@ -11,15 +11,30 @@ jobs:
       - name: Daftar file di repo
         run: find . -path ./.git -prune -o -type f -print | sort
 
-      - name: Cari pom.xml
+      - name: Siapkan sumber (pom.xml langsung, atau ekstrak zip)
         run: |
-          POM=$(find . -name pom.xml -not -path "*/target/*" | head -n 1)
-          if [ -z "$POM" ]; then
-            echo "ERROR: pom.xml TIDAK ADA di repo. Upload file pom.xml ke repo (lihat daftar file di langkah sebelumnya)."
-            exit 1
+          mkdir -p /tmp/proj /tmp/unz
+          POM=$(find . -name pom.xml -not -path "./.git/*" -not -path "*/target/*" | head -n 1)
+          if [ -n "$POM" ]; then
+            echo "Pakai pom.xml di repo: $POM"
+            cp -r "$(dirname "$POM")"/. /tmp/proj/
+          else
+            ZIP=$(find . -iname "*.zip" -not -path "./.git/*" | head -n 1)
+            if [ -z "$ZIP" ]; then
+              echo "ERROR: tidak ada pom.xml dan tidak ada file .zip di repo. Upload ZentraMinigames-repo.zip ke repo."
+              exit 1
+            fi
+            echo "Mengekstrak: $ZIP"
+            unzip -q -o "$ZIP" -d /tmp/unz
+            POM=$(find /tmp/unz -name pom.xml | head -n 1)
+            if [ -z "$POM" ]; then
+              echo "ERROR: di dalam zip tidak ada pom.xml."
+              exit 1
+            fi
+            cp -r "$(dirname "$POM")"/. /tmp/proj/
           fi
-          echo "POM=$POM" >> "$GITHUB_ENV"
-          echo "Ditemukan: $POM"
+          echo "Isi proyek:"
+          find /tmp/proj -type f | sort
 
       - uses: actions/setup-java@v5
         with:
@@ -27,12 +42,17 @@ jobs:
           java-version: '21'
 
       - name: Build
-        run: mvn -B -f "$POM" clean package
+        run: mvn -B -f /tmp/proj/pom.xml clean package
 
       - name: Isi jar
-        run: unzip -l "$(dirname "$POM")/target/ZentraMinigames.jar" | tail -30
+        run: unzip -l /tmp/proj/target/ZentraMinigames.jar | tail -30
+
+      - name: Siapkan hasil
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/hasil"
+          cp /tmp/proj/target/ZentraMinigames.jar "$GITHUB_WORKSPACE/hasil/"
 
       - uses: actions/upload-artifact@v4
         with:
           name: ZentraMinigames
-          path: "**/target/ZentraMinigames.jar"
+          path: hasil/ZentraMinigames.jar
