@@ -1,0 +1,38 @@
+name: Build
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Daftar file di repo
+        run: find . -path ./.git -prune -o -type f -print | sort
+
+      - name: Cari pom.xml
+        run: |
+          POM=$(find . -name pom.xml -not -path "*/target/*" | head -n 1)
+          if [ -z "$POM" ]; then
+            echo "ERROR: pom.xml TIDAK ADA di repo. Upload file pom.xml ke repo (lihat daftar file di langkah sebelumnya)."
+            exit 1
+          fi
+          echo "POM=$POM" >> "$GITHUB_ENV"
+          echo "Ditemukan: $POM"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build
+        run: mvn -B -f "$POM" clean package
+
+      - name: Isi jar
+        run: unzip -l "$(dirname "$POM")/target/ZentraMinigames.jar" | tail -30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZentraMinigames
+          path: "**/target/ZentraMinigames.jar"
